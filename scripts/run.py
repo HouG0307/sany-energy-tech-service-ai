@@ -147,6 +147,19 @@ def ledger():
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader(); w.writerows(rows)
     print(f"[ledger] 台账 {len(rows)} 条 -> {LEDGER_CSV}")
+    # B: 同步写 SQLite
+    try:
+        import db
+        db.upsert([{"rel_path": r["归档路径"], "filename": r["文件名"], "project": r["归档路径"].split("/")[1] if "/" in r["归档路径"] else "",
+                    "material_type": "", "size_kb": r["大小KB"], "archived_date": r["归档日期"]} for r in rows])
+        db.summary()
+    except Exception as e:
+        print(f"[ledger] SQLite 跳过: {e}")
+    # D: 生成 Web 看板
+    try:
+        import dashboard; dashboard.build()
+    except Exception as e:
+        print(f"[ledger] 看板跳过: {e}")
 
 # ---------- 6. 清理原件：移废纸篓（30天后人工清空） ----------
 def trash():

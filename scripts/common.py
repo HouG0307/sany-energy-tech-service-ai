@@ -46,10 +46,36 @@ def in_exclude_dir(rel):
     rel = rel.replace("\\", "/")
     return any(rel.startswith(e) for e in RULES["exclude_dirs"])
 
+def extract_pdf_text(path, max_chars=4000):
+    """纯标准库 PDF 文字抽取：解 FlateDecode 流，提取 ( ) 内文本。
+    扫描件（图片型 PDF）抽不出文字，属正常，返回空串。"""
+    import zlib, re
+    try:
+        with open(path, "rb") as f:
+            data = f.read()
+    except OSError:
+        return ""
+    chunks = []
+    for m in re.finditer(rb"stream\r?\n(.*?)endstream", data, re.S):
+        raw = m.group(1)
+        try:
+            dec = zlib.decompress(raw)
+        except Exception:
+            continue
+        # 提取 (text) 和 <hex> 里的内容
+        for t in re.findall(rb"\((?:[^()\\]|\\.)*\)", dec):
+            s = t[1:-1]
+            s = re.sub(rb"\\[nrt()\\]", " ", s)
+            chunks.append(s)
+    text = b" ".join(chunks).decode("utf-8", "ignore")
+    return re.sub(r"\s+", " ", text)[:max_chars]
+
 def extract_text(path, max_chars=4000):
-    """从 docx/xlsx 抽正文（本质是 zip+xml）。pdf 无依赖环境下抽不出，返回空串。"""
+    """从 docx/xlsx/pdf 抽正文（标准库）。扫描件 pdf 抽不出，返回空串。"""
     ext = os.path.splitext(path)[1].lower()
     try:
+        if ext == ".pdf":
+            return extract_pdf_text(path, max_chars)
         if ext == ".docx":
             with zipfile.ZipFile(path) as z:
                 xml = z.read("word/document.xml").decode("utf-8", "ignore")
