@@ -203,7 +203,35 @@ def trash():
         w.writeheader(); w.writerows(trashed)
     print(f"[trash] 移入废纸篓 {len(trashed)} 个；保留30天后清空 -> {log}")
 
-ACTIONS = {"scan": scan, "plan": plan, "archive": archive, "ledger": ledger, "trash": trash,
+# ---------- 7. 内容理解式重整理 ----------
+def reorg():
+    """读归档目录里每个文件的正文（pdf/docx/xlsx），按内容重新归类，移动到位。"""
+    root = expand(RULES["archive_root"])
+    inbox = os.path.join(root, "5_待确认散件")
+    moves = []
+    for dp, _, fns in os.walk(inbox):
+        for fn in fns:
+            if is_ignored_name(fn):
+                continue
+            p = os.path.join(dp, fn)
+            text = extract_text(p)
+            mtype, project, monthly, conf = classify_one(p, fn + "\n" + text)
+            if conf == "低":
+                continue  # 真读不出来的留在待确认
+            target_dir = expand(suggest_target(mtype, project, monthly, fn))
+            new = os.path.join(target_dir, fn)
+            if not os.path.exists(new):
+                os.makedirs(target_dir, exist_ok=True)
+                shutil.move(p, new)
+                moves.append({"原位置": os.path.relpath(p, root), "新位置": os.path.relpath(new, root),
+                              "内容识别项目": project or "", "置信度": conf})
+    log = os.path.join(OUT, "重整理日志.csv")
+    with open(log, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=["原位置", "新位置", "内容识别项目", "置信度"])
+        w.writeheader(); w.writerows(moves)
+    print(f"[reorg] 按内容重新归类 {len(moves)} 个文件 -> {log}")
+
+ACTIONS = {"scan": scan, "plan": plan, "archive": archive, "ledger": ledger, "trash": trash, "reorg": reorg,
            "all": lambda: (scan(), plan()),
            "auto": lambda: (print(">>> 全自动模式：扫描→归档→台账"), scan(), plan(), archive(), ledger())}
 
