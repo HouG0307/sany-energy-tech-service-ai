@@ -21,14 +21,10 @@
 git clone <本仓库地址> sany-settlement-archiver
 cd sany-settlement-archiver
 
-# 2. 扫描候选文件（只读，不动任何原件）
-python3 scripts/run.py all
+# 2. 全自动归档（一条命令：扫描→分类→归档→台账→看板，无需中途确认）
+python3 scripts/run.py auto
 
-# 3. 打开 output/落位建议表.csv，人工过目"低置信度"和归属有疑问的行
-#    （用 Excel/WPS 打开即可，UTF-8 带 BOM）
-
-# 4. 确认后执行归档（复制，不移动原件，可回退）
-python3 scripts/run.py archive
+# 3. 打开 output/归档台账.csv 验收：状态=待确认的就是需要人工过目的
 
 # 5. 生成总台账
 python3 scripts/run.py ledger

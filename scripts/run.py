@@ -37,6 +37,9 @@ def scan():
             for fn in filenames:
                 if is_ignored_name(fn):
                     continue
+                ext = fn.rsplit(".", 1)[-1].lower() if "." in fn else ""
+                if ext not in RULES.get("material_extensions", []):
+                    continue  # 非材料类型（截图/脚本/日志）不归档
                 p = os.path.join(dirpath, fn)
                 if not in_time_window(p):
                     continue
@@ -112,14 +115,17 @@ def plan():
 
 # ---------- 3. 归档（复制） ----------
 def archive():
+    """全自动归档：高/中置信度按建议目录落位；低置信度归入 5_待确认散件。"""
     if not os.path.exists(PLAN_CSV):
         plan()
     rows = list(csv.DictReader(open(PLAN_CSV, encoding="utf-8-sig")))
     done = skip = 0
     for r in rows:
+        src = r["路径"]
         if r["置信度"] == "低":
-            continue  # 低置信度先不自动归档
-        src, target_dir = r["路径"], expand(r["建议目录"])
+            target_dir = os.path.join(expand(RULES["archive_root"]), "5_待确认散件")
+        else:
+            target_dir = expand(r["建议目录"])
         os.makedirs(target_dir, exist_ok=True)
         dst = os.path.join(target_dir, r["文件名"])
         if os.path.abspath(src) == os.path.abspath(dst):
@@ -128,7 +134,7 @@ def archive():
             skip += 1; continue
         shutil.copy2(src, dst)
         done += 1
-    print(f"[archive] 复制 {done}，已存在跳过 {skip}，低置信度未动 -> 等人工确认")
+    print(f"[archive] 复制 {done}，已存在跳过 {skip}；低置信度统一进 5_待确认散件")
 
 # ---------- 4. 台账 ----------
 def ledger():
@@ -138,10 +144,13 @@ def ledger():
         for fn in fns:
             if is_ignored_name(fn): continue
             p = os.path.join(dp, fn)
+            st = os.stat(p)
             rel = os.path.relpath(p, root)
+            status = "待确认" if rel.startswith("5_待确认散件") else "已归档"
             rows.append({"归档路径": rel, "文件名": fn,
-                         "大小KB": round(os.path.getsize(p)/1024, 1),
-                         "归档日期": fmt_time(os.stat(p).st_mtime)})
+                         "大小KB": round(st.st_size/1024, 1),
+                         "状态": status,
+                         "归档日期": fmt_time(st.st_mtime)})
     rows.sort(key=lambda r: r["归档路径"])
     with open(LEDGER_CSV, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
@@ -195,7 +204,8 @@ def trash():
     print(f"[trash] 移入废纸篓 {len(trashed)} 个；保留30天后清空 -> {log}")
 
 ACTIONS = {"scan": scan, "plan": plan, "archive": archive, "ledger": ledger, "trash": trash,
-           "all": lambda: (scan(), plan())}
+           "all": lambda: (scan(), plan()),
+           "auto": lambda: (print(">>> 全自动模式：扫描→归档→台账"), scan(), plan(), archive(), ledger())}
 
 if __name__ == "__main__":
     a = sys.argv[1] if len(sys.argv) > 1 else "all"

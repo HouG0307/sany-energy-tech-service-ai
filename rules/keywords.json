@@ -22,6 +22,7 @@
     "__pycache__"
   ],
   "ignore_name_patterns": ["^\\.DS_Store$", "^~\\$", "^\\.~", "^\\.localized$"],
+  "material_extensions": ["pdf", "doc", "docx", "xls", "xlsx", "ofd", "zip", "7z", "jpg", "jpeg", "png"],
   "archive_root": "~/Desktop/结算归档",
   "material_types": {
     "合同协议":   ["合同", "补充协议", "框架", "三方协议", "四方协议"],
