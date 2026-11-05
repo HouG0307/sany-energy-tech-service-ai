@@ -1,0 +1,25 @@
+# 真实结算材料一律不进仓库
+*.pdf
+*.xlsx
+*.xls
+*.docx
+*.doc
+*.zip
+*.7z
+*.rar
+*.ofd
+*.jpg
+*.jpeg
+*.png
+*.mp4
+*.mp3
+
+# 运行产物
+output/
+__pycache__/
+*.pyc
+
+# 系统垃圾
+.DS_Store
+~$*
+.~*
