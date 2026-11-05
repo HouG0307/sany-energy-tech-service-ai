@@ -10,6 +10,7 @@
 纯标准库，macOS / Windows / Linux 均可运行。
 """
 import os, sys, csv, shutil, argparse, time
+from datetime import datetime
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (RULES, expand, in_time_window, sha1_of, is_ignored_name,
                     in_exclude_dir, extract_text, normalize_version_tag, fmt_time)
