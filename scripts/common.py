@@ -46,9 +46,31 @@ def in_exclude_dir(rel):
     rel = rel.replace("\\", "/")
     return any(rel.startswith(e) for e in RULES["exclude_dirs"])
 
+def ocr_pdf_text(path, max_pages=2, max_chars=4000):
+    """扫描件 PDF：pdftoppm 转图 + tesseract 中文OCR。前2页即可识别项目名。"""
+    import subprocess, tempfile, os
+    MINI = os.path.expanduser("~/miniconda3/bin")
+    pdftoppm = os.path.join(MINI, "pdftoppm")
+    tesseract = os.path.join(MINI, "tesseract")
+    if not (os.path.exists(pdftoppm) and os.path.exists(tesseract)):
+        return ""
+    out = []
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            subprocess.run([pdftoppm, "-png", "-r", "200", "-f", "1", "-l", str(max_pages),
+                            path, os.path.join(td, "p")], capture_output=True, timeout=60)
+            import glob
+            for img in sorted(glob.glob(os.path.join(td, "p-*.png"))):
+                r = subprocess.run([tesseract, img, "stdout", "-l", "chi_sim+eng"],
+                                   capture_output=True, timeout=60)
+                out.append(r.stdout.decode("utf-8", "ignore"))
+    except Exception:
+        return ""
+    text = " ".join(out)
+    return " ".join(text.split())[:max_chars]
+
 def extract_pdf_text(path, max_chars=4000):
-    """纯标准库 PDF 文字抽取：解 FlateDecode 流，提取 ( ) 内文本。
-    扫描件（图片型 PDF）抽不出文字，属正常，返回空串。"""
+    """先抽文字层；抽不出（扫描件）则 OCR。"""
     import zlib, re
     try:
         with open(path, "rb") as f:
@@ -62,13 +84,15 @@ def extract_pdf_text(path, max_chars=4000):
             dec = zlib.decompress(raw)
         except Exception:
             continue
-        # 提取 (text) 和 <hex> 里的内容
         for t in re.findall(rb"\((?:[^()\\]|\\.)*\)", dec):
             s = t[1:-1]
-            s = re.sub(rb"\\[nrt()\\]", " ", s)
+            s = re.sub(rb"\\[nrt()\\]", b" ", s)
             chunks.append(s)
     text = b" ".join(chunks).decode("utf-8", "ignore")
-    return re.sub(r"\s+", " ", text)[:max_chars]
+    text = re.sub(r"\s+", " ", text).strip()
+    if len(text) >= 80:
+        return text[:max_chars]
+    return ocr_pdf_text(path, max_chars=max_chars)
 
 def extract_text(path, max_chars=4000):
     """从 docx/xlsx/pdf 抽正文（标准库）。扫描件 pdf 抽不出，返回空串。"""
