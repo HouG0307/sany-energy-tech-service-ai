@@ -66,7 +66,7 @@ python3 scripts/dashboard.py     # 生成 Web 看板 output/dashboard.html，浏
 | `rules/keywords.json` | **全部业务规则**：时间窗口、扫描根目录、材料类型关键词、项目 / 井位词典、版本标记。加新项目只改这里 |
 | `scripts/run.py`      | 一键入口：scan /plan/archive /ledger/all                   |
 | `scripts/common.py`   | 时间窗口（修改 + 创建取并集）、哈希去重、docx/xlsx 正文抽取                  |
-| `templates/`          | 台账模板与命名规范                                             |
+| `templates/`          | 结算请示空白模板（docx）、台账模板与命名规范                         |
 | `changelog/`          | 每个版本的更新说明                                             |
 
 ## 版本纪律
@@ -86,7 +86,7 @@ git tag v1.1 && git push --tags
 
 
 
-* **本仓库只存脚本、规则、模板，不存真实结算材料**。`.gitignore` 已排除所有 pdf/xlsx/docx/zip。
+* **本仓库只存脚本、规则、模板，不存真实结算材料**。`.gitignore` 排除所有 pdf/xlsx/docx/zip；仅 `templates/` 下的空白模板 docx 放行（不含真实数据）。
 
 * 仓库已设为 **Public**，任何人可搜索、克隆、本地部署；真实结算材料不进 git（.gitignore 已排除），金额税率等数据只存在本地 `~/Desktop/结算归档`。
 
