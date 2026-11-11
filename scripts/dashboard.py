@@ -14,7 +14,7 @@ def build():
     by_project = collections.Counter()
     for r in rows:
         parts = r["归档路径"].split("/")
-        proj = parts[1] if len(parts) > 1 else "根目录"
+        proj = r.get("公司") or (parts[1] if len(parts) > 1 else "根目录")
         by_project[proj] += 1
     cards = "".join(
         f'<div class="card"><div class="num">{n}</div><div class="lbl">{html.escape(p)}</div></div>'

@@ -84,13 +84,20 @@ def classify_one(path, fn):
     conf = "高" if proj_hit and type_hit else ("中" if (proj_hit or type_hit) else "低")
     return mtype, project, monthly, conf
 
+def company_of(project):
+    """项目 -> 下游供应商公司；未收录返回 None。"""
+    return RULES.get("project_company", {}).get(project)
+
 def suggest_target(mtype, project, monthly, fn):
     root = expand(RULES["archive_root"])
     if monthly and not project:
         return os.path.join(root, "2_月度常规结算", f"{monthly}")
     if project:
         node = RULES["node_dir_of_type"].get(mtype, "99_其他")
-        return os.path.join(root, "1_项目结算", project, node)
+        company = company_of(project)
+        if company:
+            return os.path.join(root, "1_项目结算", company, project, node)
+        return os.path.join(root, "1_项目结算", "00_待确认公司", project, node)
     if mtype == "挂账台账":
         return os.path.join(root, "3_挂账与台账")
     return os.path.join(root, "5_待确认散件")
@@ -153,14 +160,23 @@ def ledger():
                          "状态": status,
                          "归档日期": fmt_time(st.st_mtime)})
     rows.sort(key=lambda r: r["归档路径"])
+    # 公司一级 / 项目二级 解析
+    for r in rows:
+        parts = r["归档路径"].split("/")
+        if parts[0] == "1_项目结算" and len(parts) >= 3:
+            r["公司"] = parts[1]; r["项目"] = parts[2]
+        elif parts[0] == "1_项目结算" and len(parts) == 2:
+            r["公司"] = parts[1]; r["项目"] = ""
+        else:
+            r["公司"] = ""; r["项目"] = parts[1] if len(parts) > 1 else ""
     with open(LEDGER_CSV, "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        w = csv.DictWriter(f, fieldnames=["归档路径", "公司", "项目", "文件名", "大小KB", "状态", "归档日期"])
         w.writeheader(); w.writerows(rows)
     print(f"[ledger] 台账 {len(rows)} 条 -> {LEDGER_CSV}")
     # B: 同步写 SQLite
     try:
         import db
-        db.upsert([{"rel_path": r["归档路径"], "filename": r["文件名"], "project": r["归档路径"].split("/")[1] if "/" in r["归档路径"] else "",
+        db.upsert([{"rel_path": r["归档路径"], "filename": r["文件名"], "project": r["项目"] or r["公司"],
                     "material_type": "", "size_kb": r["大小KB"], "archived_date": r["归档日期"]} for r in rows])
         db.summary()
     except Exception as e:
