@@ -5,7 +5,7 @@
 停止：Ctrl+C。零依赖（轮询实现，不需要 watchdog）。"""
 import os, sys, time, shutil
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import RULES, expand, extract_text, is_ignored_name
+from common import RULES, expand, extract_text, is_ignored_name, fmt_time
 from run import classify_one, suggest_target
 
 INBOX = os.path.join(expand(RULES["archive_root"]), "_收件箱")
@@ -13,7 +13,8 @@ INBOX = os.path.join(expand(RULES["archive_root"]), "_收件箱")
 def handle_new(path):
     fn = os.path.basename(path)
     mtype, project, monthly, conf = classify_one(path, fn)
-    target = suggest_target(mtype, project, monthly, fn)
+    month = fmt_time(os.stat(path).st_mtime)[:7]
+    target = suggest_target(mtype, project, monthly, fn, month)
     os.makedirs(expand(target), exist_ok=True)
     dst = os.path.join(expand(target), fn)
     if not os.path.exists(dst):

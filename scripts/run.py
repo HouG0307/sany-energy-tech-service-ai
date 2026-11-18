@@ -88,19 +88,21 @@ def company_of(project):
     """项目 -> 下游供应商公司；未收录返回 None。"""
     return RULES.get("project_company", {}).get(project)
 
-def suggest_target(mtype, project, monthly, fn):
+def monthly_company_of(text):
+    """月度线材料按关键词/文件夹推断公司；推断不出返回 None。"""
+    for co, kws in RULES.get("monthly_company", {}).items():
+        if any(k in text for k in kws):
+            return co
+    return None
+
+def suggest_target(mtype, project, monthly, fn, month="", company=None):
     root = expand(RULES["archive_root"])
-    if monthly and not project:
-        return os.path.join(root, "2_月度常规结算", f"{monthly}")
-    if project:
-        node = RULES["node_dir_of_type"].get(mtype, "99_其他")
-        company = company_of(project)
-        if company:
-            return os.path.join(root, "1_项目结算", company, project, node)
-        return os.path.join(root, "1_项目结算", "00_待确认公司", project, node)
     if mtype == "挂账台账":
         return os.path.join(root, "3_挂账与台账")
-    return os.path.join(root, "5_待确认散件")
+    node = RULES["node_dir_of_type"].get(mtype, "其他佐证")
+    company = company or company_of(project) or monthly_company_of(fn) or "00_待确认公司"
+    proj = project or monthly or "未分项目"
+    return os.path.join(root, "1_结算归档", company, month, proj, node)
 
 def plan():
     if not os.path.exists(SCAN_CSV):
@@ -110,7 +112,8 @@ def plan():
     for r in rows:
         path, fn = r["路径"], r["文件名"]
         mtype, project, monthly, conf = classify_one(path, fn)
-        target = suggest_target(mtype, project, monthly, fn)
+        month = r.get("修改时间", "")[:7]
+        target = suggest_target(mtype, project, monthly, fn, month)
         out.append({**r, "材料类型": mtype or "", "归属项目": project or "",
                     "月度线": monthly or "", "建议目录": target,
                     "置信度": conf, "版本标记": "/".join(normalize_version_tag(fn))})
@@ -160,24 +163,28 @@ def ledger():
                          "状态": status,
                          "归档日期": fmt_time(st.st_mtime)})
     rows.sort(key=lambda r: r["归档路径"])
-    # 公司一级 / 项目二级 解析
+    # 新层级解析：1_结算归档/<公司>/<月份>/<项目>/<节点>
     for r in rows:
         parts = r["归档路径"].split("/")
-        if parts[0] == "1_项目结算" and len(parts) >= 3:
-            r["公司"] = parts[1]; r["项目"] = parts[2]
-        elif parts[0] == "1_项目结算" and len(parts) == 2:
-            r["公司"] = parts[1]; r["项目"] = ""
+        r["月份"] = ""; r["节点"] = ""
+        if parts[0] == "1_结算归档":
+            r["公司"] = parts[1] if len(parts) > 1 else ""
+            r["月份"] = parts[2] if len(parts) > 2 else ""
+            r["项目"] = parts[3] if len(parts) > 3 else ""
+            r["节点"] = parts[4] if len(parts) > 4 else ""
         else:
             r["公司"] = ""; r["项目"] = parts[1] if len(parts) > 1 else ""
+        if r["公司"] == "00_待确认公司" or r["归档路径"].startswith("5_待确认散件"):
+            r["状态"] = "待确认"
     with open(LEDGER_CSV, "w", newline="", encoding="utf-8-sig") as f:
-        w = csv.DictWriter(f, fieldnames=["归档路径", "公司", "项目", "文件名", "大小KB", "状态", "归档日期"])
+        w = csv.DictWriter(f, fieldnames=["归档路径", "公司", "月份", "项目", "节点", "文件名", "大小KB", "状态", "归档日期"])
         w.writeheader(); w.writerows(rows)
     print(f"[ledger] 台账 {len(rows)} 条 -> {LEDGER_CSV}")
     # B: 同步写 SQLite
     try:
         import db
         db.upsert([{"rel_path": r["归档路径"], "filename": r["文件名"], "project": r["项目"] or r["公司"],
-                    "material_type": "", "size_kb": r["大小KB"], "archived_date": r["归档日期"]} for r in rows])
+                    "material_type": r["节点"], "size_kb": r["大小KB"], "archived_date": r["归档日期"]} for r in rows])
         db.summary()
     except Exception as e:
         print(f"[ledger] SQLite 跳过: {e}")
@@ -235,7 +242,7 @@ def reorg():
             mtype, project, monthly, conf = classify_one(p, fn + "\n" + text)
             if conf == "低":
                 continue  # 真读不出来的留在待确认
-            target_dir = expand(suggest_target(mtype, project, monthly, fn))
+            target_dir = expand(suggest_target(mtype, project, monthly, fn, fmt_time(os.stat(p).st_mtime)[:7]))
             new = os.path.join(target_dir, fn)
             if not os.path.exists(new):
                 os.makedirs(target_dir, exist_ok=True)
