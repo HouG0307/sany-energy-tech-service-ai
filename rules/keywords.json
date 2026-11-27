@@ -1,6 +1,6 @@
 {
- "version": "1.4.5",
- "updated": "2026-11-18",
+ "version": "1.4.6",
+ "updated": "2026-11-27",
  "time_window": {
   "start": "2026-08-01",
   "rule": "mtime 或 birthtime 任一 >= start 即纳入候选（取并集，宁多勿漏）"
